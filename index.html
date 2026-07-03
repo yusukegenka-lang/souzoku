@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>相続シミュレーション</title>
+<style>
+  :root {
+    --navy: #14213d;
+    --navy-light: #223258;
+    --gold: #c9a227;
+    --gold-light: #e6cf7e;
+    --cream: #f7f5ef;
+    --card: #ffffff;
+    --text: #1c1c1a;
+    --text-muted: #706e64;
+    --border: #ddd8c9;
+    --danger: #a3403a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Yu Gothic", "游ゴシック", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+    background: var(--cream);
+    color: var(--text);
+  }
+  .app-header {
+    background: var(--navy);
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .brand { font-size: 18px; font-weight: 700; letter-spacing: 0.02em; }
+  .steps { list-style: none; display: flex; gap: 4px; margin: 0; padding: 0; }
+  .step {
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 16px;
+    color: #c7cbe0;
+    white-space: nowrap;
+  }
+  .step.active { background: var(--gold); color: var(--navy); font-weight: 700; }
+  .step.disabled { color: #6c7599; }
+  .app-main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .screen-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 4px 0 0; }
+  h2 { font-size: 16px; font-weight: 700; margin: 0 0 10px; color: var(--navy); }
+  .btn-text {
+    background: none; border: none; color: var(--navy-light); font-size: 13px;
+    cursor: pointer; padding: 0; margin-bottom: 4px;
+  }
+  .btn-primary, .btn-secondary {
+    font-family: inherit; font-size: 14px; padding: 10px 18px; border-radius: 8px;
+    cursor: pointer; border: 1px solid transparent; font-weight: 700;
+  }
+  .btn-primary { background: var(--navy); color: #fff; }
+  .btn-primary:hover { background: var(--navy-light); }
+  .btn-secondary { background: #fff; color: var(--navy); border-color: var(--border); }
+  .btn-secondary:hover { border-color: var(--navy); }
+  .btn-add { font-size: 13px; padding: 7px 14px; margin-top: 8px; }
+  .btn-remove {
+    background: none; border: none; color: var(--danger); font-size: 18px;
+    cursor: pointer; line-height: 1; padding: 4px 8px;
+  }
+
+  /* 案件一覧 */
+  .client-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px;
+  }
+  .client-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; cursor: pointer; transition: box-shadow .15s, border-color .15s;
+  }
+  .client-card:hover { border-color: var(--gold); box-shadow: 0 2px 10px rgba(20,33,61,0.08); }
+  .client-name { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .client-meta { font-size: 12px; color: var(--text-muted); }
+  .empty-state {
+    grid-column: 1/-1; text-align: center; padding: 40px 20px; color: var(--text-muted);
+    background: var(--card); border: 1px dashed var(--border); border-radius: 10px; font-size: 14px;
+  }
+  .empty-state.error { color: var(--danger); border-color: var(--danger); }
+
+  /* 相続人設定 */
+  .heirs-layout { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; align-items: start; }
+  .form-section {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 14px;
+  }
+  .hint { font-size: 12px; color: var(--text-muted); margin: -4px 0 10px; }
+  .radio-group { display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; }
+  .radio-group label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .dynamic-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .dynamic-row:last-child { border-bottom: none; }
+  .dynamic-row input[type="text"] { flex: 1 1 140px; min-width: 120px; }
+  .dynamic-row-wide input[type="text"] { flex: 1 1 160px; }
+  .dynamic-row label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  input[type="text"], input[type="number"], input[type="date"], select {
+    font-family: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: 6px; background: #fff; color: var(--text);
+  }
+  .empty-hint { font-size: 13px; color: var(--text-muted); padding: 6px 0; }
+
+  .tree-card, .share-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 14px;
+  }
+  .tree-canvas { width: 100%; overflow-x: auto; }
+  .tree-box { fill: #ffffff; stroke: var(--navy); stroke-width: 1.2; }
+  .tree-box-main { fill: var(--gold); stroke: var(--navy); }
+  .tree-text-title { fill: var(--navy); font-size: 12px; font-weight: 700; }
+  .tree-text-sub { fill: var(--text-muted); font-size: 10px; }
+  .tree-line { stroke: var(--navy); stroke-width: 1.2; opacity: 0.55; }
+
+  .share-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .share-table th, .share-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .share-table th { color: var(--text-muted); font-weight: 700; font-size: 12px; }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(20,33,61,0.55);
+    align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal-box {
+    background: #fff; border-radius: 10px; padding: 22px; width: 100%; max-width: 380px;
+  }
+  .modal-box h3 { margin: 0 0 16px; font-size: 16px; color: var(--navy); }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--text-muted); }
+  .form-group input { width: 100%; }
+  .required { color: var(--danger); font-size: 11px; margin-left: 4px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 12px);
+    background: var(--navy); color: #fff; padding: 10px 20px; border-radius: 8px;
+    opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; font-size: 13px; z-index: 60;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 780px) {
+    .heirs-layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">相続シミュレーション</div>
+  <ol class="steps">
+    <li class="step active" id="step-list">1. 案件選択</li>
+    <li class="step" id="step-heirs">2. 相続人設定</li>
+    <li class="step disabled">3. 財産入力</li>
+    <li class="step disabled">4. 計算結果</li>
+  </ol>
+</header>
+
+<main class="app-main">
+
+  <section id="screen-list" class="screen active">
+    <div class="screen-head">
+      <h1>案件一覧</h1>
+      <button type="button" class="btn-primary" onclick="showNewClientForm()">＋ 新規案件を作成</button>
+    </div>
+    <div id="client-list" class="client-grid">
+      <div class="empty-state">読み込み中…</div>
+    </div>
+  </section>
+
+  <section id="screen-heirs" class="screen">
+    <div class="screen-head">
+      <div>
+        <button type="button" class="btn-text" onclick="backToList()">← 案件一覧に戻る</button>
+        <h1 id="current-client-name">—</h1>
+      </div>
+      <button type="button" class="btn-primary" onclick="saveHeirsToServer()">保存する</button>
+    </div>
+
+    <div class="heirs-layout">
+      <div class="heirs-form">
+
+        <div class="form-section">
+          <h2>配偶者</h2>
+          <div class="radio-group">
+            <label><input type="radio" name="spouseStatus" value="いる" onchange="onSpouseStatusChange(this.value)"> いる</label>
+            <label><input type="radio" name="spouseStatus" value="いた" onchange="onSpouseStatusChange(this.value)"> いた（死別・離別）</label>
+            <label><input type="radio" name="spouseStatus" value="いない" onchange="onSpouseStatusChange(this.value)"> いない（未婚）</label>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h2>両親</h2>
+          <div class="radio-group">
+            <label><input type="radio" name="parentsExist" value="yes" onchange="onParentsExistChange(this.value)"> いる</label>
+            <label><input type="radio" name="parentsExist" value="no" onchange="onParentsExistChange(this.value)"> いない</label>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h2>子</h2>
+          <div id="children-list"></div>
+          <button type="button" class="btn-secondary btn-add" onclick="addChild()">＋ 子を追加</button>
+        </div>
+
+        <div class="form-section">
+          <h2>孫の人数</h2>
+          <p class="hint">子がいる場合に入力してください。孫は原則相続人ではないため、生前贈与加算の対象外です（生前贈与シミュレーションの受贈者候補として使用予定）</p>
+          <input type="number" id="grandchild-count" min="0" value="0" oninput="onGrandchildCountChange(this.value)">
+        </div>
+
+        <div class="form-section" id="sibling-section">
+          <h2>兄弟姉妹の人数</h2>
+          <p class="hint">子がいない場合のみ相続人の判定に使用します</p>
+          <input type="number" id="sibling-count" min="0" value="0" oninput="onSiblingCountChange(this.value)">
+        </div>
+
+        <div class="form-section">
+          <h2>ご家族以外に財産を渡したい方</h2>
+          <p class="hint">内縁の方、事業承継の後継者、財団・法人への遺贈などを複数登録できます</p>
+          <div id="beneficiary-list"></div>
+          <button type="button" class="btn-secondary btn-add" onclick="addBeneficiary()">＋ 追加</button>
+        </div>
+
+      </div>
+
+      <div class="heirs-side">
+        <div class="tree-card">
+          <h2>家系図</h2>
+          <div class="tree-canvas">
+            <svg id="family-tree-svg" viewBox="0 0 640 200" width="100%"></svg>
+          </div>
+        </div>
+        <div class="share-card">
+          <h2>法定相続分・遺留分</h2>
+          <table class="share-table">
+            <thead><tr><th>氏名</th><th>続柄</th><th>法定相続分</th><th>遺留分</th></tr></thead>
+            <tbody id="share-summary-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="new-client-modal" class="modal-overlay">
+  <div class="modal-box">
+    <h3>新規案件を作成</h3>
+    <div class="form-group">
+      <label>顧客名<span class="required">必須</span></label>
+      <input type="text" id="new-client-name" placeholder="例：山田太郎様">
+    </div>
+    <div class="form-group">
+      <label>相続開始想定日（任意）</label>
+      <input type="date" id="new-client-date">
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" onclick="hideNewClientForm()">キャンセル</button>
+      <button type="button" class="btn-primary" onclick="createNewClient()">作成する</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ==================== 設定 ====================
+const CONFIG = {
+  API_URL: 'YOUR_GAS_WEB_APP_URL_HERE' // ★GASデプロイ後のウェブアプリURLを設定してください
+};
+
+// ==================== 状態管理 ====================
+let state = {
+  currentScreen: 'list',
+  clients: [],
+  currentClientId: null,
+  currentClientName: '',
+  heirs: {
+    spouseStatus: 'いない',
+    parentsExist: false,
+    children: [],
+    grandchildCount: 0,
+    siblingsCount: 0,
+    beneficiaries: []
+  }
+};
+
+// ==================== ユーティリティ ====================
+function escapeHtml(str) {
+  return String(str == null ? '' : str).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function toBool(v) { return v === true || v === 'TRUE' || v === 'true'; }
+function formatDate(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+}
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2200);
+}
+
+async function callApi(action, params) {
+  const res = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(Object.assign({ action: action }, params))
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error);
+  return json.data;
+}
+
+// ==================== 画面切り替え ====================
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(function (el) { el.classList.remove('active'); });
+  document.getElementById('screen-' + name).classList.add('active');
+  document.querySelectorAll('.step').forEach(function (el) { el.classList.remove('active'); });
+  const stepEl = document.getElementById('step-' + name);
+  if (stepEl) stepEl.classList.add('active');
+  state.currentScreen = name;
+}
+
+// ==================== 案件一覧 ====================
+async function loadClientList() {
+  const clients = await callApi('listClients', {});
+  state.clients = clients;
+  renderClientList();
+}
+function renderClientList() {
+  const container = document.getElementById('client-list');
+  if (!state.clients.length) {
+    container.innerHTML = '<div class="empty-state">案件がまだありません。「新規案件を作成」から始めましょう。</div>';
+    return;
+  }
+  container.innerHTML = state.clients.map(function (c) {
+    return '<div class="client-card" onclick="openClient(\'' + c.clientId + '\')">' +
+      '<div class="client-name">' + escapeHtml(c.clientName) + '</div>' +
+      '<div class="client-meta">相続開始想定日：' + escapeHtml(c.inheritanceDate || '未設定') + '</div>' +
+      '<div class="client-meta">最終更新：' + formatDate(c.updatedAt) + '</div>' +
+      '</div>';
+  }).join('');
+}
+function showNewClientForm() {
+  document.getElementById('new-client-name').value = '';
+  document.getElementById('new-client-date').value = '';
+  document.getElementById('new-client-modal').classList.add('active');
+}
+function hideNewClientForm() { document.getElementById('new-client-modal').classList.remove('active'); }
+async function createNewClient() {
+  const name = document.getElementById('new-client-name').value.trim();
+  if (!name) { alert('顧客名を入力してください'); return; }
+  const date = document.getElementById('new-client-date').value;
+  try {
+    const result = await callApi('createClient', { clientName: name, inheritanceDate: date });
+    hideNewClientForm();
+    await openClient(result.clientId, name);
+  } catch (e) {
+    alert('作成に失敗しました: ' + e.message);
+  }
+}
+
+// ==================== 相続人設定 ====================
+async function openClient(clientId, fallbackName) {
+  state.currentClientId = clientId;
+  const detail = await callApi('getClientDetail', { clientId: clientId });
+  state.currentClientName = (detail.client && detail.client.clientName) || fallbackName || '（顧客名未設定）';
+  loadHeirsIntoState(detail.heirs || []);
+  showScreen('heirs');
+  renderHeirScreen();
+}
+function backToList() {
+  showScreen('list');
+  loadClientList();
+}
+
+function loadHeirsIntoState(heirRows) {
+  const h = { spouseStatus: 'いない', parentsExist: false, children: [], grandchildCount: 0, siblingsCount: 0, beneficiaries: [] };
+  heirRows.forEach(function (r) {
+    if (r.role === '配偶者') h.spouseStatus = r.spouseStatus || 'いる';
+    else if (r.role === '親') h.parentsExist = true;
+    else if (r.role === '子') h.children.push({
+      personId: r.personId, name: r.name || '',
+      isAdoptedChild: toBool(r.isAdoptedChild), isPerStirpes: toBool(r.isPerStirpes), renounced: toBool(r.renounced)
+    });
+    else if (r.role === '孫') h.grandchildCount++;
+    else if (r.role === '兄弟姉妹') h.siblingsCount++;
+    else if (r.role === '受遺者') h.beneficiaries.push({
+      personId: r.personId, name: r.name || '',
+      beneficiaryType: r.beneficiaryType || '個人',
+      relationshipDetail: r.relationshipDetail || '',
+      assetDesc: r.note || ''
+    });
+  });
+  state.heirs = h;
+}
+
+function buildHeirRowsFromState() {
+  const rows = [];
+  rows.push({ personId: 'decedent', role: '被相続人', name: state.currentClientName || '被相続人' });
+
+  if (state.heirs.spouseStatus !== 'いない') {
+    rows.push({ personId: 'spouse', role: '配偶者', name: '配偶者', spouseStatus: state.heirs.spouseStatus });
+  }
+  if (state.heirs.parentsExist) {
+    rows.push({ personId: 'parent', role: '親', name: '両親' });
+  }
+  state.heirs.children.forEach(function (c, i) {
+    rows.push({
+      personId: c.personId, role: '子', name: c.name || ('子' + (i + 1)),
+      isAdoptedChild: c.isAdoptedChild, isPerStirpes: c.isPerStirpes, renounced: c.renounced
+    });
+  });
+  for (let i = 0; i < state.heirs.grandchildCount; i++) {
+    rows.push({ personId: 'grandchild_' + i, role: '孫', name: '孫' + (i + 1) });
+  }
+  if (!state.heirs.children.length) {
+    for (let i = 0; i < state.heirs.siblingsCount; i++) {
+      rows.push({ personId: 'sibling_' + i, role: '兄弟姉妹', name: '兄弟姉妹' + (i + 1) });
+    }
+  }
+  state.heirs.beneficiaries.forEach(function (b, i) {
+    rows.push({
+      personId: b.personId, role: '受遺者', name: b.name || ('受遺者' + (i + 1)),
+      beneficiaryType: b.beneficiaryType, relationshipDetail: b.relationshipDetail, note: b.assetDesc
+    });
+  });
+  return rows;
+}
+
+// 法定相続分・遺留分をクライアント側でも算出（家系図・サマリー表のリアルタイム表示用。保存時の正式計算はGAS側で再計算する）
+function computeDerived(heirRows) {
+  const results = heirRows.map(function (r) { return Object.assign({}, r); });
+  const heirs = heirRows.filter(function (r) { return r.role !== '被相続人' && r.role !== '受遺者'; });
+
+  const spouseObj = heirs.find(function (h) { return h.role === '配偶者'; });
+  const hasSpouse = !!spouseObj && spouseObj.spouseStatus === 'いる';
+  const children = heirs.filter(function (h) { return h.role === '子' && !h.renounced; });
+  const hasChildren = children.length > 0;
+
+  let tier;
+  if (hasChildren) tier = '子';
+  else if (heirs.filter(function (h) { return h.role === '親'; }).length > 0) tier = '親';
+  else tier = '兄弟姉妹';
+
+  function setShare(personId, share) {
+    const t = results.find(function (r) { return r.personId === personId; });
+    if (t) t.statutoryShare = share;
+  }
+
+  if (tier === '子') {
+    if (hasSpouse) {
+      setShare(spouseObj.personId, 1 / 2);
+      children.forEach(function (c) { setShare(c.personId, (1 / 2) / children.length); });
+    } else {
+      children.forEach(function (c) { setShare(c.personId, 1 / children.length); });
+    }
+  } else if (tier === '親') {
+    const parents = heirs.filter(function (h) { return h.role === '親'; });
+    if (hasSpouse) {
+      setShare(spouseObj.personId, 2 / 3);
+      parents.forEach(function (p) { setShare(p.personId, (1 / 3) / parents.length); });
+    } else {
+      parents.forEach(function (p) { setShare(p.personId, 1 / parents.length); });
+    }
+  } else {
+    const siblings = heirs.filter(function (h) { return h.role === '兄弟姉妹'; });
+    if (hasSpouse) {
+      setShare(spouseObj.personId, 3 / 4);
+      siblings.forEach(function (s) { setShare(s.personId, (1 / 4) / siblings.length); });
+    } else if (siblings.length) {
+      siblings.forEach(function (s) { setShare(s.personId, 1 / siblings.length); });
+    }
+  }
+
+  const reservedTotalRatio = (tier === '親' && !hasSpouse) ? 1 / 3 : 1 / 2;
+  results.forEach(function (r) {
+    if (r.role === '兄弟姉妹') r.reservedShare = 0;
+    else if (r.statutoryShare) r.reservedShare = r.statutoryShare * reservedTotalRatio;
+  });
+
+  return { results: results, tier: tier, hasSpouse: hasSpouse };
+}
+
+function buildTreeRows() {
+  const derived = computeDerived(buildHeirRowsFromState());
+  const results = derived.results;
+  const byRole = function (role) { return results.filter(function (r) { return r.role === role; }); };
+
+  const rows = [];
+  if (state.heirs.parentsExist) rows.push({ type: 'parents', items: byRole('親') });
+
+  const middle = [];
+  if (!state.heirs.children.length) byRole('兄弟姉妹').forEach(function (s) { middle.push(s); });
+  const decedent = results.find(function (r) { return r.role === '被相続人'; });
+  middle.push(decedent);
+  if (state.heirs.spouseStatus !== 'いない') {
+    const sp = byRole('配偶者')[0];
+    if (sp) middle.push(sp);
+  }
+  rows.push({ type: 'middle', items: middle });
+
+  if (state.heirs.children.length) rows.push({ type: 'children', items: byRole('子') });
+  if (state.heirs.grandchildCount > 0) rows.push({ type: 'grandchildren', items: byRole('孫') });
+
+  return { rows: rows, results: results };
+}
+
+function renderFamilyTreeSVG() {
+  const built = buildTreeRows();
+  const rows = built.rows;
+  const boxW = 96, boxH = 46, gapX = 14, rowGapY = 74, canvasW = 640;
+  let y = 26;
+  const positioned = [];
+  rows.forEach(function (row) {
+    const n = row.items.length;
+    const totalW = n * boxW + (n - 1) * gapX;
+    const startX = (canvasW - totalW) / 2;
+    row.items.forEach(function (item, i) {
+      positioned.push({ item: item, x: startX + i * (boxW + gapX), y: y, type: row.type });
+    });
+    y += rowGapY;
+  });
+  const totalHeight = Math.max(200, y - rowGapY + boxH + 26);
+
+  function byType(t) { return positioned.filter(function (p) { return p.type === t; }); }
+  const parentsRow = byType('parents');
+  const middleRow = byType('middle');
+  const decedentPos = middleRow.find(function (p) { return p.item.role === '被相続人'; });
+  const childrenRow = byType('children');
+  const grandRow = byType('grandchildren');
+
+  let lines = '';
+  if (parentsRow.length && decedentPos) {
+    const px = parentsRow.reduce(function (s, p) { return s + p.x + boxW / 2; }, 0) / parentsRow.length;
+    const py = parentsRow[0].y + boxH;
+    lines += '<line x1="' + px + '" y1="' + py + '" x2="' + (decedentPos.x + boxW / 2) + '" y2="' + decedentPos.y + '" class="tree-line"/>';
+  }
+  if (middleRow.length > 1) {
+    const midY = middleRow[0].y + boxH / 2;
+    const xs = middleRow.map(function (p) { return p.x + boxW / 2; });
+    lines += '<line x1="' + Math.min.apply(null, xs) + '" y1="' + midY + '" x2="' + Math.max.apply(null, xs) + '" y2="' + midY + '" class="tree-line"/>';
+  }
+  if (decedentPos && childrenRow.length) {
+    const midY2 = decedentPos.y + boxH + (rowGapY - boxH) / 2;
+    childrenRow.forEach(function (c) {
+      const cx = decedentPos.x + boxW / 2, cy2 = c.x + boxW / 2;
+      lines += '<path d="M' + cx + ' ' + (decedentPos.y + boxH) + ' L' + cx + ' ' + midY2 + ' L' + cy2 + ' ' + midY2 + ' L' + cy2 + ' ' + c.y + '" class="tree-line" fill="none"/>';
+    });
+  }
+  if (childrenRow.length && grandRow.length) {
+    const cx2 = childrenRow.reduce(function (s, p) { return s + p.x + boxW / 2; }, 0) / childrenRow.length;
+    const cy3 = childrenRow[0].y + boxH;
+    const midY3 = cy3 + (rowGapY - boxH) / 2;
+    grandRow.forEach(function (g) {
+      const gx = g.x + boxW / 2;
+      lines += '<path d="M' + cx2 + ' ' + cy3 + ' L' + cx2 + ' ' + midY3 + ' L' + gx + ' ' + midY3 + ' L' + gx + ' ' + g.y + '" class="tree-line" fill="none"/>';
+    });
+  }
+
+  const boxes = positioned.map(function (p) {
+    const isDecedent = p.item.role === '被相続人';
+    const shareText = p.item.statutoryShare ? ('法定相続分 ' + (p.item.statutoryShare * 100).toFixed(1) + '%') : p.item.role;
+    return '<g>' +
+      '<rect x="' + p.x + '" y="' + p.y + '" width="' + boxW + '" height="' + boxH + '" rx="6" class="' + (isDecedent ? 'tree-box tree-box-main' : 'tree-box') + '"/>' +
+      '<text x="' + (p.x + boxW / 2) + '" y="' + (p.y + 19) + '" text-anchor="middle" class="tree-text-title">' + escapeHtml(p.item.name || p.item.role) + '</text>' +
+      '<text x="' + (p.x + boxW / 2) + '" y="' + (p.y + 34) + '" text-anchor="middle" class="tree-text-sub">' + escapeHtml(shareText) + '</text>' +
+      '</g>';
+  }).join('');
+
+  const svg = document.getElementById('family-tree-svg');
+  svg.setAttribute('viewBox', '0 0 ' + canvasW + ' ' + totalHeight);
+  svg.innerHTML = lines + boxes;
+}
+
+function renderShareSummary() {
+  const built = buildTreeRows();
+  const relevant = built.results.filter(function (r) { return r.role !== '被相続人' && r.role !== '受遺者' && r.role !== '孫' && (r.statutoryShare || r.role === '兄弟姉妹'); });
+  const body = document.getElementById('share-summary-body');
+  if (!relevant.length) {
+    body.innerHTML = '<tr><td colspan="4">相続人情報を入力すると表示されます</td></tr>';
+    return;
+  }
+  body.innerHTML = relevant.map(function (r) {
+    const share = r.statutoryShare ? (r.statutoryShare * 100).toFixed(2) + '%' : '—';
+    const reserved = r.role === '兄弟姉妹' ? 'なし' : (r.reservedShare ? (r.reservedShare * 100).toFixed(2) + '%' : '—');
+    return '<tr><td>' + escapeHtml(r.name || r.role) + '</td><td>' + escapeHtml(r.role) + '</td><td>' + share + '</td><td>' + reserved + '</td></tr>';
+  }).join('');
+}
+
+// ---- 子 ----
+function addChild() {
+  state.heirs.children.push({ personId: 'child_' + Date.now().toString(36) + Math.floor(Math.random() * 1000), name: '', isAdoptedChild: false, isPerStirpes: false, renounced: false });
+  renderHeirScreen();
+}
+function removeChild(i) { state.heirs.children.splice(i, 1); renderHeirScreen(); }
+function updateChild(i, field, value) {
+  state.heirs.children[i][field] = value;
+  renderFamilyTreeSVG();
+  renderShareSummary();
+}
+function renderChildrenList() {
+  const container = document.getElementById('children-list');
+  container.innerHTML = state.heirs.children.map(function (c, i) {
+    return '<div class="dynamic-row">' +
+      '<input type="text" placeholder="氏名（任意）" value="' + escapeHtml(c.name) + '" oninput="updateChild(' + i + ',\'name\',this.value)">' +
+      '<label><input type="checkbox" ' + (c.isAdoptedChild ? 'checked' : '') + ' onchange="updateChild(' + i + ',\'isAdoptedChild\',this.checked)"> 養子</label>' +
+      '<label><input type="checkbox" ' + (c.isPerStirpes ? 'checked' : '') + ' onchange="updateChild(' + i + ',\'isPerStirpes\',this.checked)"> 代襲相続人</label>' +
+      '<label><input type="checkbox" ' + (c.renounced ? 'checked' : '') + ' onchange="updateChild(' + i + ',\'renounced\',this.checked)"> 相続放棄</label>' +
+      '<button type="button" class="btn-remove" onclick="removeChild(' + i + ')" aria-label="削除">&times;</button>' +
+      '</div>';
+  }).join('') || '<div class="empty-hint">「子を追加」から登録してください</div>';
+}
+
+// ---- 受遺者 ----
+function addBeneficiary() {
+  state.heirs.beneficiaries.push({ personId: 'beneficiary_' + Date.now().toString(36) + Math.floor(Math.random() * 1000), name: '', beneficiaryType: '個人', relationshipDetail: '', assetDesc: '' });
+  renderHeirScreen();
+}
+function removeBeneficiary(i) { state.heirs.beneficiaries.splice(i, 1); renderHeirScreen(); }
+function updateBeneficiary(i, field, value) { state.heirs.beneficiaries[i][field] = value; }
+function renderBeneficiaryList() {
+  const container = document.getElementById('beneficiary-list');
+  container.innerHTML = state.heirs.beneficiaries.map(function (b, i) {
+    return '<div class="dynamic-row dynamic-row-wide">' +
+      '<input type="text" placeholder="氏名・名称" value="' + escapeHtml(b.name) + '" oninput="updateBeneficiary(' + i + ',\'name\',this.value)">' +
+      '<select onchange="updateBeneficiary(' + i + ',\'beneficiaryType\',this.value)">' +
+      '<option value="個人"' + (b.beneficiaryType === '個人' ? ' selected' : '') + '>個人</option>' +
+      '<option value="法人・公益法人等"' + (b.beneficiaryType === '法人・公益法人等' ? ' selected' : '') + '>法人・公益法人等</option>' +
+      '</select>' +
+      '<input type="text" placeholder="関係性（内縁関係、事業承継後継者など）" value="' + escapeHtml(b.relationshipDetail) + '" oninput="updateBeneficiary(' + i + ',\'relationshipDetail\',this.value)">' +
+      '<input type="text" placeholder="渡したい財産の内容・想定金額" value="' + escapeHtml(b.assetDesc) + '" oninput="updateBeneficiary(' + i + ',\'assetDesc\',this.value)">' +
+      '<button type="button" class="btn-remove" onclick="removeBeneficiary(' + i + ')" aria-label="削除">&times;</button>' +
+      '</div>';
+  }).join('') || '<div class="empty-hint">該当する方がいれば「追加」から登録してください</div>';
+}
+
+// ---- 配偶者・両親・孫・兄弟姉妹 ----
+function onSpouseStatusChange(v) { state.heirs.spouseStatus = v; renderFamilyTreeSVG(); renderShareSummary(); }
+function onParentsExistChange(v) { state.heirs.parentsExist = (v === 'yes'); renderFamilyTreeSVG(); renderShareSummary(); }
+function onGrandchildCountChange(v) { state.heirs.grandchildCount = Math.max(0, parseInt(v, 10) || 0); renderFamilyTreeSVG(); }
+function onSiblingCountChange(v) { state.heirs.siblingsCount = Math.max(0, parseInt(v, 10) || 0); renderFamilyTreeSVG(); renderShareSummary(); }
+
+// ---- 画面全体の描画 ----
+function renderHeirScreen() {
+  document.getElementById('current-client-name').textContent = state.currentClientName;
+  document.querySelectorAll('input[name="spouseStatus"]').forEach(function (el) { el.checked = el.value === state.heirs.spouseStatus; });
+  document.querySelectorAll('input[name="parentsExist"]').forEach(function (el) { el.checked = (el.value === 'yes') === state.heirs.parentsExist; });
+  document.getElementById('grandchild-count').value = state.heirs.grandchildCount;
+  document.getElementById('sibling-count').value = state.heirs.siblingsCount;
+  document.getElementById('sibling-section').style.display = state.heirs.children.length ? 'none' : 'block';
+
+  renderChildrenList();
+  renderBeneficiaryList();
+  renderFamilyTreeSVG();
+  renderShareSummary();
+}
+
+async function saveHeirsToServer() {
+  try {
+    const rows = buildHeirRowsFromState();
+    await callApi('saveHeirs', { clientId: state.currentClientId, heirs: rows });
+    showToast('保存しました');
+  } catch (e) {
+    alert('保存に失敗しました: ' + e.message);
+  }
+}
+
+// ==================== 初期化 ====================
+window.addEventListener('DOMContentLoaded', function () {
+  loadClientList().catch(function (err) {
+    document.getElementById('client-list').innerHTML =
+      '<div class="empty-state error">読み込みに失敗しました。CONFIG.API_URL の設定を確認してください。<br>' + escapeHtml(err.message) + '</div>';
+  });
+});
+</script>
+</body>
+</html>
